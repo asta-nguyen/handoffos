@@ -1,0 +1,31 @@
+{
+  "name": "handoff-os",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared working memory for coding agents — switch tools, keep context",
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsc -b --watch",
+    "lint": "eslint packages/*/src --ext .ts",
+    "format": "prettier --write 'packages/*/src/**/*.ts'",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rm -rf packages/*/dist packages/*/node_modules node_modules"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "pnpm@10.11.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild"
+    ]
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.1.8",
+    "eslint": "^10.5.0",
+    "prettier": "^3.8.4",
+    "vitest": "^4.1.8"
+  }
+}

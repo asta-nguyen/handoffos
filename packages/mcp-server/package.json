@@ -1,0 +1,16 @@
+{
+  "name": "@handoff-os/mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@handoff-os/core": "workspace:*",
+    "@handoff-os/shared": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.7.0"
+  }
+}

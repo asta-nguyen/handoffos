@@ -1,0 +1,19 @@
+{
+  "name": "@handoff-os/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "bin": {
+    "ctx": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@handoff-os/core": "workspace:*",
+    "@handoff-os/shared": "workspace:*",
+    "cac": "^6.7.14"
+  }
+}

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+*.db
+*.db-journal
+.shared-context/
+.env
+.DS_Store
+coverage/
+
+*tsconfig.tsbuildinfo
+
+*/**/tsconfig.tsbuildinfo
