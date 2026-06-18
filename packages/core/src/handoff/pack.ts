@@ -1,35 +1,31 @@
-import type { HandoffPack, MemoryRecord, AgentTarget, HandoffFormatter } from "@handoff-os/shared";
-import { listOpenTasks, searchMemories, getBranchContext } from "../memory/engine.js";
-import { getCurrentBranch } from "../git/context.js";
+import type { HandoffPack, MemoryRecord, AgentTarget } from "@handoff-os/shared";
+import { searchMemories } from "../memory/engine.js";
+import { getBranchInfoSafely } from "../git/context.js";
+import { getDb, handoffLogs } from "../db/connection.js";
+import { nanoid } from "../utils/nanoid.js";
 
 export function generateResumePack(params: {
   task?: string;
   target: AgentTarget;
 }): HandoffPack {
-  const branchInfo = getCurrentBranch();
-  const openTasks = listOpenTasks({
-    repo: branchInfo.repo,
-    branch: branchInfo.name,
-  });
+  const branchInfo = getBranchInfoSafely();
+  if (!branchInfo) {
+    throw new Error("Not in a git repository. Run from a git-tracked project to generate a resume pack.");
+  }
 
-  const targetTask = params.task
-    ? openTasks.find((t) => t.title === params.task || t.scope.task === params.task)
-    : openTasks[0];
-
-  const decisions = searchMemories({
-    type: "decision",
+  // Single scoped query replaces 4 separate calls
+  const results = searchMemories({
     scope: { repo: branchInfo.repo, branch: branchInfo.name },
-    limit: 10,
-    offset: 0,
-  });
-
-  const blockers = searchMemories({
-    type: "blocker",
     status: "active",
-    scope: { repo: branchInfo.repo, branch: branchInfo.name },
     limit: 5,
     offset: 0,
   });
+
+  const targetTask: MemoryRecord | undefined = params.task
+    ? results.find((m) => m.type === "task" && (m.title === params.task || m.scope.task === params.task))
+    : results.find((m) => m.type === "task");
+  const decisions = results.filter((m) => m.type === "decision");
+  const blockers = results.filter((m) => m.type === "blocker");
 
   const currentGoal = targetTask
     ? targetTask.title
@@ -43,7 +39,7 @@ export function generateResumePack(params: {
     nextSteps.unshift(`Continue: ${targetTask.title}`);
   }
 
-  return {
+  const pack: HandoffPack = {
     title: currentGoal,
     goal: targetTask ? targetTask.content : `Active work on branch ${branchInfo.name}`,
     scope: {
@@ -60,6 +56,25 @@ export function generateResumePack(params: {
     source_agent: "handoff-os",
     target_agent: params.target,
   };
+
+  // Log the handoff so the audit trail is queryable
+  try {
+    getDb()
+      .insert(handoffLogs)
+      .values({
+        id: `hl_${nanoid()}`,
+        from_agent: "handoff-os",
+        to_agent: params.target,
+        task: params.task ?? targetTask?.title,
+        pack_json: JSON.stringify(pack),
+        created_at: pack.generated_at,
+      })
+      .run();
+  } catch {
+    // DB not initialized — skip logging (handoff still works)
+  }
+
+  return pack;
 }
 
 export function formatForAgent(pack: HandoffPack, target: AgentTarget): string {
@@ -76,7 +91,7 @@ export function formatForAgent(pack: HandoffPack, target: AgentTarget): string {
 }
 
 function formatClaude(pack: HandoffPack): string {
-  return [
+  const lines: (string | null)[] = [
     `# Handoff: ${pack.title}`,
     "",
     "## Current goal",
@@ -85,24 +100,39 @@ function formatClaude(pack: HandoffPack): string {
     "## Scope",
     `- Repo: ${pack.scope.repo ?? "N/A"}`,
     `- Branch: ${pack.scope.branch ?? "N/A"}`,
-    pack.scope.task ? `- Task: ${pack.scope.task}` : "",
+    pack.scope.task ? `- Task: ${pack.scope.task}` : null,
     "",
-    "## Files touched",
-    ...pack.files_touched.map((f) => `- ${f}`),
-    "",
-    "## Decisions",
-    ...pack.decisions.map((d) => `- **${d.title}**: ${d.content}`),
-    "",
-    "## Blockers",
-    pack.blockers.length > 0
-      ? pack.blockers.map((b) => `- **${b.title}**: ${b.content}`)
-      : ["- None"],
-    "",
-    "## Next steps",
-    ...pack.next_steps.map((s, i) => `${i + 1}. ${s}`),
-  ]
-    .filter(Boolean)
-    .join("\n");
+  ];
+
+  if (pack.files_touched.length > 0) {
+    lines.push("## Files touched");
+    for (const f of pack.files_touched) lines.push(`- ${f}`);
+    lines.push("");
+  }
+
+  if (pack.decisions.length > 0) {
+    lines.push("## Decisions");
+    for (const d of pack.decisions) {
+      lines.push(`- **${d.title}**: ${d.content}`);
+    }
+    lines.push("");
+  }
+
+  if (pack.blockers.length > 0) {
+    lines.push("## Blockers");
+    for (const b of pack.blockers) {
+      lines.push(`- **${b.title}**: ${b.content}`);
+    }
+    lines.push("");
+  }
+
+  lines.push("## Next steps");
+  for (let i = 0; i < pack.next_steps.length; i++) {
+    lines.push(`${i + 1}. ${pack.next_steps[i]!}`);
+  }
+  lines.push("");
+
+  return lines.filter((l) => l !== null).join("\n");
 }
 
 function formatCodex(pack: HandoffPack): string {

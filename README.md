@@ -137,6 +137,10 @@ The snapshot is **what the new agent needs to know** — not a diff, but a brief
 - Handle resize (recalculate parallax factor)
 - Add reduced-motion media query fallback
 
+### 🗑️ Removed
+- `hooks/useLegacyScroll.ts` — old scroll listener deleted. Its
+  `getScrollY()` callers migrated to `useScrollPosition()`.
+
 ### What happened
 - `hooks/useScrollPosition.ts` — added custom hook using
   `requestAnimationFrame` + debounce. Main export: `useScrollPosition()`.
@@ -174,7 +178,8 @@ For reliable cross-agent handoff, every agent must write `latest.md` with the sa
 | `### ✅ Done` | Recommended | Completed items — bullet list, one per logical unit |
 | `### 🟡 In Progress` | Yes | Currently active work — what the agent was doing at exit |
 | `### 📋 Will Do` | Recommended | Upcoming work, ordered by priority |
-| `### What happened` | Yes | File-by-file summary of changes since last handoff. Function names, not diffs. |
+| `### What happened` | Yes | File-by-file summary of changes since last handoff. Function names, not diffs. For deleted files, describe what they contained and where the functionality now lives. |
+| `### 🗑️ Removed` | Recommended | Files deleted or content moved. What they contained and where it went. Prevents agents from trying to import deleted files or losing knowledge of removed code. |
 | `### Key decisions` | Recommended | Technical decisions with rationale. Enables the next agent to understand _why_. |
 | `### Blockers` | Yes | Current blocking issues, or "None" |
 | `### Next Steps` | Recommended | Ordered action items for the next agent |
@@ -184,6 +189,14 @@ For reliable cross-agent handoff, every agent must write `latest.md` with the sa
 - Do NOT include chat transcripts — synthesize into structured entries under the relevant section
 - Keep the briefing under one page — if it's longer, the agent skipped context management
 - All sections are **stable by name** — agents rely on exact header text to parse. Do not rename sections.
+- **Deleted content must be documented** — when removing a file or moving its contents, describe what it contained and where the functionality now lives. Without this, the next agent has no way to know what was lost. Example:
+  ```markdown
+  ### 🗑️ Removed
+  - `src/utils/helpers.ts` — contained `parseDate()` and `formatCurrency()`.
+    Logic moved to `src/utils/parse.ts` and `src/utils/currency.ts`.
+  - `src/legacy/adapter.ts` — no longer needed. API provider changed their
+    contract, all call sites updated to use the new client directly.
+  ```
 
 ## MCP Server
 

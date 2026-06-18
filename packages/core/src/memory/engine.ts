@@ -1,6 +1,6 @@
 import { getDb, memories, sessions } from "../db/connection.js";
-import type { CreateMemoryInput, MemoryRecord, MemoryScope, MemoryStatus, SearchQuery } from "@handoff-os/shared";
-import { calculateRanking } from "@handoff-os/shared";
+import type { CreateMemoryInput, MemoryRecord, MemoryScope, MemoryStatus } from "@handoff-os/shared";
+import { calculateRanking, SearchQuery } from "@handoff-os/shared";
 import { eq, and, like, or, sql } from "drizzle-orm";
 import { nanoid } from "../utils/nanoid.js";
 
@@ -8,6 +8,29 @@ export function createMemory(input: CreateMemoryInput): MemoryRecord {
   const db = getDb();
   const now = new Date().toISOString();
   const id = `mem_${nanoid()}`;
+
+  // Dedup: skip insert if active memory with same title+repo+branch+type exists
+  if (input.scope.repo && input.scope.branch) {
+    const existing = db
+      .select()
+      .from(memories)
+      .where(
+        and(
+          eq(memories.title, input.title),
+          eq(memories.repo, input.scope.repo),
+          eq(memories.branch, input.scope.branch),
+          eq(memories.type, input.type),
+          eq(memories.status, "active"),
+        ),
+      )
+      .get();
+    if (existing) {
+      if (input.supersedes) {
+        updateMemoryStatus(input.supersedes, "superseded", existing.id);
+      }
+      return rowToRecord(existing);
+    }
+  }
 
   const record: MemoryRecord = {
     id,
@@ -83,6 +106,12 @@ export function getMemory(id: string): MemoryRecord | undefined {
 
 export function searchMemories(query: SearchQuery): MemoryRecord[] {
   const db = getDb();
+  // Validate through zod to apply defaults (limit, offset)
+  const validated = SearchQuery.safeParse(query);
+  if (!validated.success) {
+    throw new Error(`Invalid search query: ${validated.error.message}`);
+  }
+  query = validated.data;
   const conditions = [];
 
   if (query.scope?.workspace) {
@@ -113,10 +142,10 @@ export function searchMemories(query: SearchQuery): MemoryRecord[] {
   }
 
   const query_builder = db.select().from(memories);
-  const rows = (conditions.length > 0
+  const filtered = conditions.length > 0
     ? query_builder.where(and(...conditions))
-    : query_builder
-  ).all();
+    : query_builder;
+  const rows = filtered.all();
 
   const records = rows.map(rowToRecord);
 
@@ -142,25 +171,30 @@ export function listOpenTasks(scope?: Partial<MemoryScope>): MemoryRecord[] {
   const db = getDb();
   const conditions = [
     eq(memories.type, "task"),
-    or(eq(memories.status, "active"), eq(memories.status, "stale")),
+    eq(memories.status, "active"),
   ];
 
   if (scope?.workspace) conditions.push(eq(memories.workspace, scope.workspace));
   if (scope?.repo) conditions.push(eq(memories.repo, scope.repo));
   if (scope?.branch) conditions.push(eq(memories.branch, scope.branch));
+  if (scope?.task) conditions.push(eq(memories.task, scope.task));
 
   return db
     .select()
     .from(memories)
     .where(and(...conditions))
     .orderBy(sql`updated_at DESC`)
+    .limit(10)
     .all()
     .map(rowToRecord);
 }
 
 export function getBranchContext(branch: string, repo?: string): MemoryRecord[] {
   const db = getDb();
-  const conditions = [eq(memories.branch, branch)];
+  const conditions = [
+    eq(memories.branch, branch),
+    or(eq(memories.status, "active"), eq(memories.status, "stale")),
+  ];
   if (repo) conditions.push(eq(memories.repo, repo));
 
   return db
@@ -168,9 +202,39 @@ export function getBranchContext(branch: string, repo?: string): MemoryRecord[] 
     .from(memories)
     .where(and(...conditions))
     .orderBy(sql`updated_at DESC`)
-    .limit(50)
+    .limit(5)
     .all()
     .map(rowToRecord);
+}
+
+export function createSession(input: {
+  agent: string;
+  summary: string;
+  repo?: string;
+  branch?: string;
+  task?: string;
+  files_touched?: string[];
+}): { id: string } {
+  const db = getDb();
+  const now = new Date().toISOString();
+  const id = `ses_${nanoid()}`;
+
+  db.insert(sessions)
+    .values({
+      id,
+      agent: input.agent,
+      workspace: "main",
+      repo: input.repo ?? null,
+      branch: input.branch ?? null,
+      task: input.task ?? null,
+      summary: input.summary,
+      files_touched: input.files_touched ?? [],
+      created_at: now,
+      updated_at: now,
+    })
+    .run();
+
+  return { id };
 }
 
 function rowToRecord(row: any): MemoryRecord {

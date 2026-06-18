@@ -1,28 +1,20 @@
 import {
   generateResumePack,
   formatForAgent,
-  createMemory,
-  searchMemories,
-  getMemory,
-  listOpenTasks,
-  getBranchContext,
 } from "@handoff-os/core";
 import type { HandoffPack, AgentTarget } from "@handoff-os/shared";
 
-export function claudeAdapter(task?: string): string {
-  const pack = generateResumePack({ task, target: "claude" });
-  return formatForAgent(pack, "claude");
+/** Factory for typed agent adapters — eliminates 3 identical wrapper functions. */
+function createAgentAdapter(target: AgentTarget): (task?: string) => string {
+  return (task?: string): string => {
+    const pack = generateResumePack({ task, target });
+    return formatForAgent(pack, target);
+  };
 }
 
-export function codexAdapter(task?: string): string {
-  const pack = generateResumePack({ task, target: "codex" });
-  return formatForAgent(pack, "codex");
-}
-
-export function opencodeAdapter(task?: string): string {
-  const pack = generateResumePack({ task, target: "opencode" });
-  return formatForAgent(pack, "opencode");
-}
+export const claudeAdapter = createAgentAdapter("claude");
+export const codexAdapter = createAgentAdapter("codex");
+export const opencodeAdapter = createAgentAdapter("opencode");
 
 export function genericAdapter(task?: string): HandoffPack {
   return generateResumePack({ task, target: "generic" });

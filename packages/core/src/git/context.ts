@@ -61,3 +61,12 @@ export function getCurrentBranch(): BranchInfo {
     changed_files: files,
   };
 }
+
+/** Safe variant — returns null instead of throwing when outside a git repo. */
+export function getBranchInfoSafely(): BranchInfo | null {
+  try {
+    return getCurrentBranch();
+  } catch {
+    return null;
+  }
+}
