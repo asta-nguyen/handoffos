@@ -1,0 +1,27 @@
+plan/README.md
+  s_38989b84a756e9::t_2733d69b9239bf 1-53
+plan/m3-first-plugin.md
+  s_38989b84a756e9::t_2733d69b9239bf 1-304
+plan/m4-agent-templates.md
+  s_38989b84a756e9::t_2733d69b9239bf 1-258
+plan/m2-mcp-contract.md
+  s_38989b84a756e9::t_2733d69b9239bf 1-321
+plan/m1-cli-contract.md
+  s_38989b84a756e9::t_2733d69b9239bf 1-341
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "b82d18047ec027811d2502a1527915405143dde3",
+  "prompts": {},
+  "sessions": {
+    "s_38989b84a756e9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ee01a-368c-7702-a76e-1cff847f5326",
+        "model": "gpt-5.5"
+      },
+      "human_author": "asta-nguyen <asta.dev.520@gmail.com>"
+    }
+  }
+}
