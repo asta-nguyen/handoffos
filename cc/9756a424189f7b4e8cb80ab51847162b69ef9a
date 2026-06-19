@@ -1,0 +1,32 @@
+packages/cli/src/index.ts
+  s_b707cad2af2886::t_037a2fc5f124ad 2-4,7-10
+README.md
+  s_38989b84a756e9::t_5eba2fd5ab5125 29-34,421
+docs/USAGE.md
+  s_38989b84a756e9::t_5eba2fd5ab5125 1-60,63-475,478-577
+  s_38989b84a756e9::t_323316677e960d 61-62,476-477
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.5.8",
+  "base_commit_sha": "cc9756a424189f7b4e8cb80ab51847162b69ef9a",
+  "prompts": {},
+  "sessions": {
+    "s_38989b84a756e9": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "019ee01a-368c-7702-a76e-1cff847f5326",
+        "model": "gpt-5.5"
+      },
+      "human_author": "asta-nguyen <asta.dev.520@gmail.com>"
+    },
+    "s_b707cad2af2886": {
+      "agent_id": {
+        "tool": "windsurf",
+        "id": "e3f32083-3c99-40ce-b6f7-fb83cc12760d",
+        "model": "Kimi K2.6"
+      },
+      "human_author": "asta-nguyen <asta.dev.520@gmail.com>"
+    }
+  }
+}
