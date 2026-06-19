@@ -1,7 +1,7 @@
 import type { MemoryRecord, MemoryStatus } from "@handoff-os/shared";
 import { getDb, memories } from "../db/connection.js";
-import { eq } from "drizzle-orm";
-import { getCurrentBranch } from "../git/context.js";
+import { eq, and } from "drizzle-orm";
+import { getBranchInfoSafely } from "../git/context.js";
 
 export function pinMemory(id: string): void {
   getDb().update(memories).set({ pinned: true }).where(eq(memories.id, id)).run();
@@ -25,20 +25,23 @@ export function supersedeMemory(oldId: string, newId: string): void {
 }
 
 export function detectStaleMemories(repo?: string, branch?: string): MemoryRecord[] {
+  const repoFilter = repo;
   if (!repo || !branch) {
-    try {
-      const ctx = getCurrentBranch();
-      repo = repo ?? ctx.repo;
-      branch = branch ?? ctx.name;
-    } catch {
-      return [];
-    }
+    const ctx = getBranchInfoSafely();
+    if (!ctx) return [];
+    repo = repo ?? ctx.repo;
+    branch = branch ?? ctx.name;
+  }
+
+  const conditions = [eq(memories.branch, branch!)];
+  if (repoFilter) {
+    conditions.push(eq(memories.repo, repo!));
   }
 
   const stale = getDb()
     .select()
     .from(memories)
-    .where(eq(memories.branch, branch!))
+    .where(and(...conditions))
     .all()
     .filter((r) => r.status === "active" && isStaleByAge(r.created_at));
 

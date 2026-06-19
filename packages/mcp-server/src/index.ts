@@ -3,6 +3,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import {
   createMemory,
+  createSession,
   searchMemories,
   listOpenTasks,
   getBranchContext,
@@ -11,7 +12,8 @@ import {
   pinMemory,
   invalidateMemory,
   supersedeMemory,
-  getCurrentBranch,
+  detectStaleMemories,
+  getBranchInfoSafely,
 } from "@handoff-os/core";
 
 export async function createMcpServer(dbPath: string) {
@@ -36,10 +38,8 @@ export async function createMcpServer(dbPath: string) {
       pinned: z.boolean().optional(),
     },
     async (input) => {
-      let branchInfo;
-      try {
-        branchInfo = getCurrentBranch();
-      } catch {
+      const branchInfo = getBranchInfoSafely();
+      if (!branchInfo) {
         throw new Error("Not in a git repository");
       }
 
@@ -60,7 +60,7 @@ export async function createMcpServer(dbPath: string) {
       });
 
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(mem, null, 2) }],
+        content: [{ type: "text" as const, text: `Saved: ${mem.id} — ${mem.title}` }],
       };
     },
   );
@@ -76,17 +76,36 @@ export async function createMcpServer(dbPath: string) {
       limit: z.number().min(1).max(100).default(20),
     },
     async (input) => {
+      const branchInfo = getBranchInfoSafely();
+      if (branchInfo) {
+        detectStaleMemories(branchInfo.repo, branchInfo.name);
+      }
+
+      const scope: Record<string, string> = {};
+      if (branchInfo) {
+        scope.repo = branchInfo.repo;
+        scope.branch = branchInfo.name;
+      }
+      if (input.task) scope.task = input.task;
+
       const results = searchMemories({
         query: input.query,
         type: input.type,
-        status: input.status,
-        scope: input.task ? { task: input.task } : undefined,
+        status: input.status ?? "active",
+        scope: Object.keys(scope).length > 0 ? scope : undefined,
         limit: input.limit,
         offset: 0,
       });
 
+      const trimmed = results.map((r) => ({
+        id: r.id,
+        type: r.type,
+        title: r.title,
+        content: r.content,
+        confidence: r.confidence,
+      }));
       return {
-        content: [{ type: "text" as const, text: JSON.stringify(results, null, 2) }],
+        content: [{ type: "text" as const, text: JSON.stringify(trimmed, null, 2) }],
       };
     },
   );
@@ -99,6 +118,12 @@ export async function createMcpServer(dbPath: string) {
       target: z.enum(["claude", "codex", "opencode", "generic"]).default("generic"),
     },
     async (input) => {
+      const branchInfo = getBranchInfoSafely();
+      if (!branchInfo) {
+        throw new Error("Not in a git repository. Run from a git-tracked project to generate a resume pack.");
+      }
+      detectStaleMemories(branchInfo.repo, branchInfo.name);
+
       const pack = generateResumePack({
         task: input.task,
         target: input.target,
@@ -154,16 +179,11 @@ export async function createMcpServer(dbPath: string) {
       task: z.string().optional(),
     },
     async (input) => {
-      let branchInfo;
-      try {
-        branchInfo = getCurrentBranch();
-      } catch {
-        branchInfo = null;
-      }
+      const branchInfo = getBranchInfoSafely();
 
       const tasks = listOpenTasks(
         branchInfo
-          ? { repo: branchInfo.repo, branch: branchInfo.name }
+          ? { repo: branchInfo.repo, branch: branchInfo.name, task: input.task }
           : undefined,
       );
 
@@ -178,7 +198,11 @@ export async function createMcpServer(dbPath: string) {
     "Get the memory snapshot for the current branch",
     {},
     async () => {
-      const branchInfo = getCurrentBranch();
+      const branchInfo = getBranchInfoSafely();
+      if (!branchInfo) {
+        throw new Error("Not in a git repository.");
+      }
+      detectStaleMemories(branchInfo.repo, branchInfo.name);
       const context = getBranchContext(branchInfo.name, branchInfo.repo);
 
       return {
@@ -195,6 +219,84 @@ export async function createMcpServer(dbPath: string) {
               null,
               2,
             ),
+          },
+        ],
+      };
+    },
+  );
+
+  server.tool(
+    "copy_context",
+    "Generate context snapshot files (.shared-context/latest.md, latest.diff, latest.json) for agent handoff",
+    {
+      task: z.string().optional(),
+    },
+    async (input) => {
+      const { writeContextSnapshot } = await import("@handoff-os/core");
+      const ctxDir = `${process.cwd()}/.shared-context`;
+      const result = writeContextSnapshot(ctxDir);
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Context snapshot written:\n- ${result.mdPath}\n- ${result.diffPath}\n- ${result.jsonPath}`,
+          },
+        ],
+      };
+    },
+  );
+
+  server.tool(
+    "commit_session",
+    "Save a session summary to the memory database after completing work",
+    {
+      summary: z.string(),
+      task: z.string().optional(),
+      files_touched: z.array(z.string()).optional(),
+    },
+    async (input) => {
+      const branchInfo = getBranchInfoSafely();
+      if (!branchInfo) {
+        throw new Error("Not in a git repository. Run from a git-tracked project to commit a session.");
+      }
+
+      const result = createSession({
+        agent: "mcp",
+        summary: input.summary,
+        repo: branchInfo.repo,
+        branch: branchInfo.name,
+        task: input.task,
+        files_touched: input.files_touched ?? branchInfo.changed_files,
+      });
+
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: `Session committed: ${result.id}`,
+          },
+        ],
+      };
+    },
+  );
+
+  server.tool(
+    "run_hygiene",
+    "Detect and mark stale memories (older than 7 days) so ranking penalizes them",
+    {},
+    async () => {
+      const branchInfo = getBranchInfoSafely();
+      if (!branchInfo) {
+        throw new Error("Not in a git repository.");
+      }
+      const stale = detectStaleMemories(branchInfo.repo, branchInfo.name);
+      return {
+        content: [
+          {
+            type: "text" as const,
+            text: stale.length > 0
+              ? `Marked ${stale.length} memory(ies) as stale:\n${stale.map((m) => `- ${m.title} (${m.type})`).join("\n")}`
+              : "No stale memories found.",
           },
         ],
       };

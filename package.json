@@ -22,6 +22,9 @@
       "esbuild"
     ]
   },
+  "dependencies": {
+    "@handoff-os/core": "workspace:*"
+  },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.8",
     "eslint": "^10.5.0",

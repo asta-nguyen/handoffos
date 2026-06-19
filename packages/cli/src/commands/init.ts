@@ -1,8 +1,7 @@
 import type { CAC } from "cac";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { join, basename } from "node:path";
-import { createConnection, initializeDatabase } from "@handoff-os/core";
-import { execSync } from "node:child_process";
+import { join } from "node:path";
+import { createConnection, initializeDatabase, getBranchInfoSafely } from "@handoff-os/core";
 
 const MEMORY_DB_PATH = ".shared-context/memory.db";
 const CONFIG_PATH = ".shared-context/config.json";
@@ -36,13 +35,10 @@ export function initCommand(cli: CAC) {
       createConnection(dbPath);
       initializeDatabase();
 
-      let gitInfo = "";
-      try {
-        const branch = execSync("git branch --show-current", { encoding: "utf-8" }).trim();
-        const toplevel = execSync("git rev-parse --show-toplevel", { encoding: "utf-8" }).trim();
-        const repo = basename(toplevel);
-        gitInfo = `  repo: ${repo}, branch: ${branch}`;
-      } catch {}
+      const branchInfo = getBranchInfoSafely();
+      const gitInfo = branchInfo
+        ? `  repo: ${branchInfo.repo}, branch: ${branchInfo.name}`
+        : "";
 
       console.log(`Initialized handoff-os in ${cwd}`);
       console.log(`  .shared-context/ created${gitInfo}`);
