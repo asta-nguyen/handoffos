@@ -26,6 +26,12 @@ Agent B picks up: goal → files → decisions → blockers → next steps
 
 The filesystem is the bridge. No cloud, no daemon, no shared database needed. Any agent — even one that never heard of Handoff OS — can read `.shared-context/latest.md` with a simple `cat`.
 
+## Usage Documentation
+
+For a detailed local setup and operating guide, including current CLI usage,
+MCP caveats, workflow examples, troubleshooting, and the difference between
+current implementation and product direction, see [docs/USAGE.md](docs/USAGE.md).
+
 ## The Only Scenario That Matters
 
 **The exit moment.** You're about to lose context. You need a single compact thing to hand off. That's it. Everything else is automatic.
