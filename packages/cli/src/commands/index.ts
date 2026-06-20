@@ -1,6 +1,7 @@
 import { cac } from "cac";
 import { initCommand } from "./init.js";
 import { statusCommand } from "./status.js";
+import { copyCommand } from "./copy.js";
 import { commitSessionCommand } from "./commit-session.js";
 import { searchCommand } from "./search.js";
 import { resumeCommand } from "./resume.js";
@@ -15,6 +16,7 @@ export const cli = cac("ctx");
 
 initCommand(cli);
 statusCommand(cli);
+copyCommand(cli);
 commitSessionCommand(cli);
 searchCommand(cli);
 resumeCommand(cli);
