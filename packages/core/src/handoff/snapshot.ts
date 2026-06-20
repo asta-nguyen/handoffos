@@ -12,6 +12,7 @@ export interface SnapshotData {
   branch: string;
   repo: string;
   agent: string;
+  task?: string;
   done: string[];
   in_progress: string[];
   will_do: string[];
@@ -23,7 +24,7 @@ export interface SnapshotData {
   generated_at: string;
 }
 
-export function generateSnapshotData(): SnapshotData {
+export function generateSnapshotData(opts?: { task?: string }): SnapshotData {
   const git = getGitContext();
 
   const openTasks = listOpenTasks({ repo: git.repo_name, branch: git.branch });
@@ -80,10 +81,13 @@ export function generateSnapshotData(): SnapshotData {
     : ["Review changed files and continue implementation."];
 
   return {
-    goal: git.recent_commits[0]?.message ?? "No recent commits.",
+    goal: opts?.task
+      ? opts.task
+      : git.recent_commits[0]?.message ?? "No recent commits.",
     branch: git.branch,
     repo: git.repo_name,
     agent: "handoff-os",
+    task: opts?.task,
     done,
     in_progress: inProgress,
     will_do: willDo,
@@ -156,14 +160,18 @@ export function getGitDiff(): string {
   }
 }
 
-export function writeContextSnapshot(ctxDir: string): {
+export function writeContextSnapshot(
+  ctxDir: string,
+  opts?: { task?: string },
+): {
   mdPath: string;
   diffPath: string;
   jsonPath: string;
+  generated_at: string;
 } {
   mkdirSync(ctxDir, { recursive: true });
 
-  const snapshot = generateSnapshotData();
+  const snapshot = generateSnapshotData(opts);
   const md = formatSnapshotMarkdown(snapshot);
   const diff = getGitDiff();
   const json = formatSnapshotJson(snapshot);
@@ -176,5 +184,5 @@ export function writeContextSnapshot(ctxDir: string): {
   writeFileSync(diffPath, diff);
   writeFileSync(jsonPath, json);
 
-  return { mdPath, diffPath, jsonPath };
+  return { mdPath, diffPath, jsonPath, generated_at: snapshot.generated_at };
 }
