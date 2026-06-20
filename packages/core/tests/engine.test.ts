@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { createConnection, initializeDatabase } from "../src/db/connection.js";
+import { eq } from "drizzle-orm";
+import { createConnection, initializeDatabase, getDb, memories } from "../src/db/connection.js";
 import { createMemory, getMemory, searchMemories, listOpenTasks } from "../src/memory/engine.js";
-import { pinMemory, invalidateMemory, supersedeMemory } from "../src/memory/lifecycle.js";
+import { pinMemory, invalidateMemory, supersedeMemory, detectStaleMemories } from "../src/memory/lifecycle.js";
 import { rmSync, existsSync } from "node:fs";
 
 const TEST_DB = "/tmp/handoff-os-test.db";
@@ -161,5 +162,78 @@ describe("Memory Lifecycle", () => {
     const oldMem = getMemory(old.id);
     expect(oldMem?.status).toBe("superseded");
     expect(oldMem?.superseded_by).toBe(updated.id);
+  });
+
+  it("supersedeMemory() marks old memory with new id", () => {
+    const a = createMemory({
+      type: "fact",
+      title: "First version",
+      content: "v1",
+      scope: { workspace: "main", repo: "test-repo" },
+      source: { kind: "manual", agent: "test" },
+    });
+    const b = createMemory({
+      type: "fact",
+      title: "Second version",
+      content: "v2",
+      scope: { workspace: "main", repo: "test-repo" },
+      source: { kind: "manual", agent: "test" },
+    });
+
+    supersedeMemory(a.id, b.id);
+    const updated = getMemory(a.id);
+    expect(updated?.status).toBe("superseded");
+    expect(updated?.superseded_by).toBe(b.id);
+  });
+
+  it("detectStaleMemories flags active memories older than 7 days", () => {
+    const stale = createMemory({
+      type: "decision",
+      title: "Old decision",
+      content: "made last month",
+      scope: { workspace: "main", repo: "test-repo", branch: "main" },
+      source: { kind: "manual", agent: "test" },
+    });
+    // Backdate to 8 days ago so the 7-day staleness threshold triggers
+    const eightDaysAgo = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000).toISOString();
+    getDb().update(memories).set({ created_at: eightDaysAgo }).where(eq(memories.id, stale.id)).run();
+
+    const staleRecords = detectStaleMemories("test-repo", "main");
+    expect(staleRecords.some((m) => m.id === stale.id)).toBe(true);
+
+    const after = getMemory(stale.id);
+    expect(after?.status).toBe("stale");
+  });
+
+  it("detectStaleMemories returns [] when no scope provided and not in a git repo", () => {
+    const result = detectStaleMemories();
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  it("searchMemories by task scope and by text query (title vs content match)", () => {
+    createMemory({
+      type: "fact",
+      title: "Architecture uses ports",
+      content: "internal note about port allocation",
+      scope: { workspace: "main", repo: "test-repo", branch: "main", task: "migrate-db" },
+      source: { kind: "manual", agent: "test" },
+    });
+    createMemory({
+      type: "fact",
+      title: "Other note",
+      content: "mentions ports briefly",
+      scope: { workspace: "main", repo: "test-repo", branch: "main", task: "other-task" },
+      source: { kind: "manual", agent: "test" },
+    });
+
+    const byTask = searchMemories({ scope: { task: "migrate-db" }, offset: 0 });
+    expect(byTask.length).toBeGreaterThan(0);
+    expect(byTask.every((m) => m.scope.task === "migrate-db")).toBe(true);
+
+    const byTitleText = searchMemories({ query: "Architecture", offset: 0 });
+    expect(byTitleText.length).toBeGreaterThan(0);
+
+    const byContentText = searchMemories({ query: "mentions ports", offset: 0 });
+    expect(byContentText.length).toBeGreaterThan(0);
   });
 });

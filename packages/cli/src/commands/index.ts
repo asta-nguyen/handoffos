@@ -10,11 +10,13 @@ import { invalidateCommand } from "./invalidate.js";
 import { supersedeCommand } from "./supersede.js";
 import { tasksCommand } from "./tasks.js";
 import { branchContextCommand } from "./branch-context.js";
+import { copyCommand } from "./copy.js";
 
 export const cli = cac("ctx");
 
 initCommand(cli);
 statusCommand(cli);
+copyCommand(cli);
 commitSessionCommand(cli);
 searchCommand(cli);
 resumeCommand(cli);

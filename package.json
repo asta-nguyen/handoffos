@@ -23,7 +23,8 @@
     ]
   },
   "dependencies": {
-    "@handoff-os/core": "workspace:*"
+    "@handoff-os/core": "workspace:*",
+    "@handoff-os/cli": "workspace:*"
   },
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.8",
