@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@handoff-os/cli':
+        specifier: workspace:*
+        version: link:packages/cli
       '@handoff-os/core':
         specifier: workspace:*
         version: link:packages/core
