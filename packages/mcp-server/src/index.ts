@@ -1,6 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { existsSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
 import {
   createMemory,
   createSession,
@@ -14,11 +16,10 @@ import {
   supersedeMemory,
   detectStaleMemories,
   getBranchInfoSafely,
+  writeContextSnapshot,
 } from "@handoff-os/core";
 
-export async function createMcpServer(dbPath: string) {
-  const { createConnection } = await import("@handoff-os/core");
-  createConnection(dbPath);
+export async function createMcpServer() {
 
   const server = new McpServer({
     name: "handoff-os",
@@ -232,16 +233,53 @@ export async function createMcpServer(dbPath: string) {
       task: z.string().optional(),
     },
     async (input) => {
-      const { writeContextSnapshot } = await import("@handoff-os/core");
-      const ctxDir = `${process.cwd()}/.shared-context`;
-      const result = writeContextSnapshot(ctxDir);
+      const ctxDir = join(process.cwd(), ".shared-context");
+      const result = writeContextSnapshot(ctxDir, { task: input.task });
+      const files = {
+        markdown: relative(process.cwd(), result.mdPath),
+        diff: relative(process.cwd(), result.diffPath),
+        json: relative(process.cwd(), result.jsonPath),
+      };
       return {
         content: [
           {
             type: "text" as const,
-            text: `Context snapshot written:\n- ${result.mdPath}\n- ${result.diffPath}\n- ${result.jsonPath}`,
+            text: JSON.stringify({ ok: true, files, generated_at: result.generated_at }, null, 2),
           },
         ],
+      };
+    },
+  );
+
+  server.tool(
+    "read_context",
+    "Read the latest context snapshot files (markdown, diff, or json)",
+    {
+      format: z.enum(["markdown", "diff", "json"]).default("markdown"),
+    },
+    async (input) => {
+      const ctxDir = join(process.cwd(), ".shared-context");
+      const fileName = input.format === "json"
+        ? "latest.json"
+        : input.format === "diff"
+          ? "latest.diff"
+          : "latest.md";
+      const filePath = join(ctxDir, fileName);
+
+      if (!existsSync(filePath)) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: `No snapshot file found at ${filePath}. Call copy_context first to generate a snapshot.`,
+            },
+          ],
+        };
+      }
+
+      const content = readFileSync(filePath, "utf-8");
+      return {
+        content: [{ type: "text" as const, text: content }],
       };
     },
   );
@@ -273,7 +311,17 @@ export async function createMcpServer(dbPath: string) {
         content: [
           {
             type: "text" as const,
-            text: `Session committed: ${result.id}`,
+            text: JSON.stringify(
+              {
+                ok: true,
+                session_id: result.id,
+                repo: branchInfo.repo,
+                branch: branchInfo.name,
+                files_touched: input.files_touched ?? branchInfo.changed_files,
+              },
+              null,
+              2,
+            ),
           },
         ],
       };
@@ -294,9 +342,19 @@ export async function createMcpServer(dbPath: string) {
         content: [
           {
             type: "text" as const,
-            text: stale.length > 0
-              ? `Marked ${stale.length} memory(ies) as stale:\n${stale.map((m) => `- ${m.title} (${m.type})`).join("\n")}`
-              : "No stale memories found.",
+            text: JSON.stringify(
+              {
+                ok: true,
+                stale_count: stale.length,
+                stale_memories: stale.map((m) => ({
+                  id: m.id,
+                  title: m.title,
+                  type: m.type,
+                })),
+              },
+              null,
+              2,
+            ),
           },
         ],
       };
@@ -307,7 +365,11 @@ export async function createMcpServer(dbPath: string) {
 }
 
 export async function startMcpServer(dbPath: string) {
-  const server = await createMcpServer(dbPath);
+  const { createConnection } = await import("@handoff-os/core");
+  createConnection(dbPath);
+  const { initializeDatabase } = await import("@handoff-os/core");
+  initializeDatabase();
+  const server = await createMcpServer();
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }

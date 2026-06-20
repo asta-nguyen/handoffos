@@ -3,9 +3,18 @@
 Keep a Changelog + SemVer.
 
 ## [Unreleased]
-- M2: MCP server (8 tools)
 - M3: Plugin (auto-inject context)
 - M4: Agent templates (Claude/Codex/OpenCode)
+
+## [0.2.0] — 2026-06-20
+
+**M2: MCP Contract** — `handoff-os-mcp` binary exposing 12 Handoff OS tools via MCP.
+
+### Added
+- `handoff-os-mcp` binary — MCP server entrypoint, resolves `.shared-context/memory.db`
+- `read_context` tool — reads snapshot files from `.shared-context/`
+- 3 tools now return structured JSON: `copy_context`, `commit_session`, `run_hygiene`
+- 7 integration tests (49 total across all packages)
 
 ## [0.1.0] - 2026-06-20
 
