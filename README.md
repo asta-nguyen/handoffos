@@ -91,34 +91,44 @@ This is the universal fallback. Handoff OS plugins and MCP server add convenienc
 
 ### Agent Bootstrap Configuration
 
-For seamless handoff, configure each agent to read `.shared-context/latest.md` on session start. These are one-time setup per project:
+Handoff OS works with any agent — no plugins, no MCP, just a file on disk.
+Use `ctx install-template` to drop the right config file into your project:
 
-**Claude Code** — add to `CLAUDE.md` at project root:
-```markdown
-On session start: if `.shared-context/latest.md` exists, read it and continue
-from where the previous agent left off.
+```bash
+# Quick install — pick your agent
+ctx install-template claude           # → CLAUDE.md
+ctx install-template codex            # → AGENTS.md
+ctx install-template cursor           # → .cursorrules
+ctx install-template windsurf         # → .windsurfrules
+ctx install-template cline            # → .clinerules
+ctx install-template kilo             # → AGENTS.md
+ctx install-template generic          # → AGENT_CONTEXT.md
+
+# Overwrite if already exists
+ctx install-template claude --force
 ```
 
-**Kilo / Cline / Aider** — add to `AGENTS.md` or `.clinerules`:
-```markdown
-On session start: check for `.shared-context/latest.md`. If present, read it
-to understand current state, then continue work.
-```
+| Agent | File | What it does |
+|-------|------|-------------|
+| Claude Code | `CLAUDE.md` | Read `latest.md` on start, write on exit |
+| Codex | `AGENTS.md` | Read `latest.md` on start, write on exit |
+| Cursor | `.cursorrules` | Resume from saved context |
+| Windsurf | `.windsurfrules` | Resume from saved context |
+| Cline | `.clinerules` | Read + write context |
+| Kilo | `AGENTS.md` | Read + write context |
+| Any agent | `AGENT_CONTEXT.md` | Universal fallback |
 
-**Cursor / Windsurf** — add to `.cursorrules`:
-```markdown
-When a new session starts: if `.shared-context/latest.md` exists, read it and
-resume from the last saved context.
-```
+**How templates relate to plugins and MCP:**
 
-**OpenCode** — built-in `/resume` command (reads `.shared-context/latest.md`):
-```json
-{
-  "onStart": ["read .shared-context/latest.md"]
-}
-```
+| Layer | How it works | Best for |
+|-------|-------------|----------|
+| **Plugins** (OpenCode) | Full `/init`, `/status`, `/commit`, `/resume`, `/copy` | Daily drivers |
+| **MCP** (any MCP agent) | Native tools: `read_context`, `copy_context`, etc. | IDE agents |
+| **Templates** (all agents) | Instruction-only — read a file at startup, follow rules | Any agent, zero runtime |
 
 Once these configs are in place, every agent automatically picks up context — even agents that have never heard of Handoff OS.
+
+> **Troubleshooting:** If the agent ignores the template, make sure the file is in project root (not a subdirectory) and is UTF-8 without BOM. Cursor reads `.cursorrules` only at session start — restart after placing the file.
 
 ### What's in `latest.md`
 

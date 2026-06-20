@@ -10,6 +10,7 @@ import { invalidateCommand } from "./invalidate.js";
 import { supersedeCommand } from "./supersede.js";
 import { tasksCommand } from "./tasks.js";
 import { branchContextCommand } from "./branch-context.js";
+import { installTemplateCommand } from "./install-template.js";
 
 export const cli = cac("ctx");
 
@@ -24,6 +25,7 @@ invalidateCommand(cli);
 supersedeCommand(cli);
 tasksCommand(cli);
 branchContextCommand(cli);
+installTemplateCommand(cli);
 
 cli.version("0.1.0");
 cli.help();
